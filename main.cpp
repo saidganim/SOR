@@ -137,7 +137,10 @@ int main(int argc, char** argv) {
         alloc_grid(&G, N);
         init_grid(G, N);
     }
-
+     if(world_rank == P - 1){
+		memcpy(G[N/P], G[N - 1], N * sizeof(double));
+     }
+     //print_grid(G, N, world_rank);
     // Real Computation
     iteration = 0;
     do {
@@ -149,8 +152,8 @@ int main(int argc, char** argv) {
             MPI_Recv(G[0], N, MPI_DOUBLE, world_rank - 1, MY_ITER_TAG, MPI_COMM_WORLD, &status);
         if(world_rank != P - 1)
             MPI_Recv(G[N/P], N, MPI_DOUBLE, world_rank + 1, MY_ITER_TAG, MPI_COMM_WORLD, &status);
-        if(world_rank) MPI_Wait(&request, &status);
-        if(world_rank != P - 1) MPI_Wait(&request_2, &status);
+        // if(world_rank) MPI_Wait(&request, &status);
+        // if(world_rank != P - 1) MPI_Wait(&request_2, &status);
         MPI_Barrier(MPI_COMM_WORLD);
         maxdiff = 0.0;
         for (int phase = 0; phase < 2; phase++) {
@@ -172,16 +175,13 @@ int main(int argc, char** argv) {
          // if(world_rank == 1)printf("SUCCESS #2\n");
         //MPI_Barrier(MPI_COMM_WORLD);
          // if(world_rank == 1)printf("SUCCESS #3\n");
-         printf(" ITERATION %d NODE %d , maxdif=%f , global_maxdiff=%f , stopdiff=%f\n", iteration, world_rank, maxdiff, glob_maxdiff, stopdiff);
     } while (glob_maxdiff > stopdiff);
     // printf("Running %d x %d SOR on cpu with rank %d out of world=%d\n", N, N, world_rank, world_size);
     
-    print_grid(G, N, world_rank);
     if(!world_rank){
         // Master node
         double new_row[N];
         for(int i = 1; i < P; ++i){
-            printf("TRYING TO GET BUF FROM %d\n", i);
             double new_row[N];
             for(int j = 1; j < N/P; ++j){
                 int n = 0;
@@ -189,30 +189,22 @@ int main(int argc, char** argv) {
                 // MPI_Probe(1, MY_FINAL_TAG, MPI_COMM_WORLD, &status);
                 MPI_Recv((double*)new_row, N, MPI_DOUBLE, i, MY_FINAL_TAG, MPI_COMM_WORLD, &status);
                 MPI_Get_count(&status, MPI_DOUBLE, &n);
-                printf("reciving %d\n", n);
-                for(int k = 0; k < N; ++k)
-                    printf(" %04f ", new_row[k]);
-                printf("\n");
                 // 
-                printf("%d ATTENDED NEW ROW with ID=%d \n",N/P, i * N/P + j);
                 memcpy((void*)G[i * N/P + j - 1], (void*)new_row, sizeof(double) * N);    
             }
         }
     } else {
          for(int j = 1; j <= N/P; ++j){
-            printf("sending %d\n", j);
             double a[N];
             for(int k = 0; k < N; ++k){
                 a[k] = 1;
-                printf("%d :::  %04f ",world_rank, G[j][k]);
             }
-            printf("\n");
             MPI_Send((double*)G[j], N, MPI_DOUBLE, 0, MY_FINAL_TAG, MPI_COMM_WORLD);
         }
     }
     MPI_Barrier(MPI_COMM_WORLD);
-    // if(!world_rank)
     print_grid(G, N, world_rank);
+    // if(!world_rank)
     // Finalize the MPI environment.
     MPI_Finalize();
     exit(0);
