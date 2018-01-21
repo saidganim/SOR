@@ -34,7 +34,7 @@ alloc_grid(double ***Gptr, int N)
 {
     double    **G = malloc(N * sizeof *G);
     if (G == NULL) {
-        fprintf(stderr, "malloc failed\n");
+        printf("malloc failed\n");
         exit(42);
     }
 
@@ -42,7 +42,7 @@ alloc_grid(double ***Gptr, int N)
         /* of overlap on each side */
         G[i] = malloc(N * sizeof *G[i]);
         if (G[i] == NULL) {
-            fprintf(stderr, "malloc failed\n");
+            printf("malloc failed\n");
             exit(42);
         }
     }
@@ -104,21 +104,21 @@ main(int argc, char *argv[])
     int         print = 0;
 
     /* set up problem size */
-    N = 10;
+    N = 100;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-print") == 0) {
             print = 1;
         } else {
             if (sscanf(argv[i], "%d", &N) != 1) {
-                fprintf(stderr, "Positional parameter N must be an int, not '%s'\n",
+                printf("Positional parameter N must be an int, not '%s'\n",
                         argv[i]);
                 exit(42);
             }
         }
     }
 
-    fprintf(stderr, "Running %d x %d SOR\n", N, N);
+    printf("Running %d x %d SOR\n", N, N);
 
     N += 2;                     /* add the two border lines */
     /* finally N*N (from argv) array points will be computed */
@@ -134,7 +134,7 @@ main(int argc, char *argv[])
     init_grid(G, N);
 
     if (gettimeofday(&start, 0) != 0) {
-        fprintf(stderr, "could not do timing\n");
+        printf("could not do timing\n");
         exit(1);
     }
 
@@ -159,14 +159,14 @@ main(int argc, char *argv[])
     } while (maxdiff > stopdiff);
 
     if (gettimeofday(&end, 0) != 0) {
-        fprintf(stderr, "could not do timing\n");
+        printf("could not do timing\n");
         exit(1);
     }
 
     time = (end.tv_sec + (end.tv_usec / 1000000.0)) -
         (start.tv_sec + (start.tv_usec / 1000000.0));
 
-    fprintf(stderr, "SOR took %10.3f seconds\n", time);
+    printf("SOR took %10.3f seconds\n", time);
 
     printf("Used %5d iterations, diff is %10.6f, allowed diff is %10.6f\n",
            iteration, maxdiff, stopdiff);

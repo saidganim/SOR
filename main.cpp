@@ -13,6 +13,11 @@
 #define MY_ITER_TAG 0xbad02
 #define MY_PRINT_TAG 0x003
 
+
+
+int world_rank;
+
+
 static int
 even(int i)
 {
@@ -28,19 +33,19 @@ stencil(double **G, int row, int col)
 }
 
 static void
-alloc_grid(double ***Gptr, int N)
-{
+alloc_grid(double ***Gptr, int N){
+	int coeff = world_rank? P : 1;
     double **G = (double**)malloc(N * sizeof(double*));
     if (G == NULL) {
-        fprintf(stderr, "malloc failed\n");
+        printf("malloc failed\n");
         exit(42);
     }
 
-    for (int i = 0; i < N; i++) {   /* malloc the own range plus one more line */
+    for (int i = 0; i <= (N / coeff); i++) {   /* malloc the own range plus one more line */
         /* of overlap on each side */
         G[i] = (double*)malloc(N * sizeof *G[i]);
         if (G[i] == NULL) {
-            fprintf(stderr, "malloc failed\n");
+            printf("malloc failed\n");
             exit(42);
         }
     }
@@ -51,12 +56,13 @@ alloc_grid(double ***Gptr, int N)
 static void
 init_grid(double **G, int N)
 {
+	int coeff = world_rank? P : 1;
     /* initialize the grid */
-    for (int i = 0; i < N; i++) {
+    for (int i = 0; i <= (N / coeff); i++) {
         for (int j = 0; j < N; j++) {
             if (i == 0)
                 G[i][j] = 4.56;
-            else if (i == N - 1)
+            else if (i == (N / coeff))
                 G[i][j] = 9.85;
             else if (j == 0)
                 G[i][j] = 7.32;
@@ -73,20 +79,14 @@ void
 print_grid(double **G, int N, int world_rank)
 {
     int res;
+    int coeff = world_rank? P : 1;
     MPI_Status status;
-    if(world_rank)
-        MPI_Recv(&res, 1, MPI_INT, 0, MY_PRINT_TAG, MPI_COMM_WORLD, &status);
-    printf("BEGINNING OF GRID OF %d\n", world_rank);
-    for (int i = 1; i < N - 1; i++) {
-        printf("GRID OF %d ", world_rank);
+    for (int i = 1; i < (N / coeff) - 1; i++) {
         for (int j = 1; j < N - 1; j++) {
             printf("%10.3f ", G[i][j]);
         }
         printf("\n");
     }
-    printf("END OF GRID OF %d\n", world_rank);
-    if(!world_rank)
-        MPI_Send(&res, 1, MPI_INT, 1, MY_PRINT_TAG, MPI_COMM_WORLD);
 }
 
 int main(int argc, char** argv) {
@@ -106,15 +106,12 @@ int main(int argc, char** argv) {
     MPI_Init(NULL, NULL);
     MPI_Status source, status;
     MPI_Request request, request_2;
-    // Get the number of processes
     int world_size;
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-    // Get the rank of the process
-    int world_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-    /* set up problem size */
-    unsigned int N = 10;
-    printf(" CPU FOUND %d\n", world_rank);
+    unsigned int N = 100;
+    if(!world_rank)
+    	printf("Running %d x %d SOR\n", N, N);
     N += 2;    
     ncol = nrow = N;
         r = 0.5 * (cos(M_PI / ncol) + cos(M_PI / nrow));
@@ -128,7 +125,7 @@ int main(int argc, char** argv) {
         alloc_grid(&G, N);
         init_grid(G, N);
         if(gettimeofday(&start, 0) != 0) {
-            fprintf(stderr, "could not do timing\n");
+            printf("could not do timing\n");
             exit(1);
         }
     } else {
@@ -137,11 +134,16 @@ int main(int argc, char** argv) {
         alloc_grid(&G, N);
         init_grid(G, N);
     }
-     if(world_rank == P - 1){
-		memcpy(G[N/P], G[N - 1], N * sizeof(double));
-     }
-     //print_grid(G, N, world_rank);
-    // Real Computation
+    
+    if(!world_rank){
+    	if (gettimeofday(&start, 0) != 0) {
+	        printf("could not do timing\n");
+	        exit(1);
+    	}
+    }
+
+
+    // Parallel SOR:
     iteration = 0;
     do {
         if(world_rank)
@@ -152,8 +154,6 @@ int main(int argc, char** argv) {
             MPI_Recv(G[0], N, MPI_DOUBLE, world_rank - 1, MY_ITER_TAG, MPI_COMM_WORLD, &status);
         if(world_rank != P - 1)
             MPI_Recv(G[N/P], N, MPI_DOUBLE, world_rank + 1, MY_ITER_TAG, MPI_COMM_WORLD, &status);
-        // if(world_rank) MPI_Wait(&request, &status);
-        // if(world_rank != P - 1) MPI_Wait(&request_2, &status);
         MPI_Barrier(MPI_COMM_WORLD);
         maxdiff = 0.0;
         for (int phase = 0; phase < 2; phase++) {
@@ -168,16 +168,13 @@ int main(int argc, char** argv) {
                 }
             }
         }
-        iteration++;
+        ++iteration;
         MPI_Barrier(MPI_COMM_WORLD);
-         // if(world_rank == 1)printf("SUCCESS #1\n");
         MPI_Allreduce(&maxdiff, &glob_maxdiff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-         // if(world_rank == 1)printf("SUCCESS #2\n");
-        //MPI_Barrier(MPI_COMM_WORLD);
-         // if(world_rank == 1)printf("SUCCESS #3\n");
+        if(!world_rank)
+        	std::cout<<" ITERATION " << iteration << std::endl;
     } while (glob_maxdiff > stopdiff);
-    // printf("Running %d x %d SOR on cpu with rank %d out of world=%d\n", N, N, world_rank, world_size);
-    
+
     if(!world_rank){
         // Master node
         double new_row[N];
@@ -185,11 +182,8 @@ int main(int argc, char** argv) {
             double new_row[N];
             for(int j = 1; j < N/P; ++j){
                 int n = 0;
-                
-                // MPI_Probe(1, MY_FINAL_TAG, MPI_COMM_WORLD, &status);
                 MPI_Recv((double*)new_row, N, MPI_DOUBLE, i, MY_FINAL_TAG, MPI_COMM_WORLD, &status);
                 MPI_Get_count(&status, MPI_DOUBLE, &n);
-                // 
                 memcpy((void*)G[i * N/P + j - 1], (void*)new_row, sizeof(double) * N);    
             }
         }
@@ -202,9 +196,20 @@ int main(int argc, char** argv) {
             MPI_Send((double*)G[j], N, MPI_DOUBLE, 0, MY_FINAL_TAG, MPI_COMM_WORLD);
         }
     }
-    MPI_Barrier(MPI_COMM_WORLD);
-    print_grid(G, N, world_rank);
-    // if(!world_rank)
+
+    if(!world_rank){
+    	if (gettimeofday(&end, 0) != 0) {
+        	printf("could not do timing\n");
+        	exit(1);
+    	}
+	    time = (end.tv_sec + (end.tv_usec / 1000000.0)) -
+	        (start.tv_sec + (start.tv_usec / 1000000.0));
+
+	    printf("SOR took %10.3f seconds\n", time);	
+	    printf("Used %5d iterations, diff is %10.6f, allowed diff is %10.6f\n", 
+	    	iteration, maxdiff, stopdiff);
+	    print_grid(G, N, world_rank);
+    }
     // Finalize the MPI environment.
     MPI_Finalize();
     exit(0);
