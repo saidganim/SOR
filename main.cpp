@@ -7,7 +7,6 @@
 
 #define TOLERANCE 0.00002       /* termination criterion */
 #define MAGIC 0.8               /* magic factor */
-#define P 2
 #define MY_INIT_TAG 0xbad00
 #define MY_FINAL_TAG 0xbad01
 #define MY_ITER_TAG 0xbad02
@@ -16,6 +15,7 @@
 
 
 int world_rank;
+unsigned int P;
 
 
 static int
@@ -108,6 +108,7 @@ int main(int argc, char** argv) {
     MPI_Request request, request_2;
     int world_size;
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    P = world_size;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
     unsigned int N = 100;
     if(!world_rank)
