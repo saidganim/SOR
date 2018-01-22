@@ -176,6 +176,22 @@ int main(int argc, char** argv) {
         	std::cout<<" ITERATION " << iteration << std::endl;
     } while (glob_maxdiff > stopdiff);
 
+
+	if(!world_rank){
+    	if (gettimeofday(&end, 0) != 0) {
+        	printf("could not do timing\n");
+        	exit(1);
+    	}
+	    time = (end.tv_sec + (end.tv_usec / 1000000.0)) -
+	        (start.tv_sec + (start.tv_usec / 1000000.0));
+
+	    printf("SOR took %10.3f seconds\n", time);	
+	    printf("Used %5d iterations, diff is %10.6f, allowed diff is %10.6f\n", 
+	    	iteration, maxdiff, stopdiff);
+	    print_grid(G, N, world_rank);
+    }
+
+
     if(!world_rank){
         // Master node
         double new_row[N];
@@ -196,20 +212,6 @@ int main(int argc, char** argv) {
             }
             MPI_Send((double*)G[j], N, MPI_DOUBLE, 0, MY_FINAL_TAG, MPI_COMM_WORLD);
         }
-    }
-
-    if(!world_rank){
-    	if (gettimeofday(&end, 0) != 0) {
-        	printf("could not do timing\n");
-        	exit(1);
-    	}
-	    time = (end.tv_sec + (end.tv_usec / 1000000.0)) -
-	        (start.tv_sec + (start.tv_usec / 1000000.0));
-
-	    printf("SOR took %10.3f seconds\n", time);	
-	    printf("Used %5d iterations, diff is %10.6f, allowed diff is %10.6f\n", 
-	    	iteration, maxdiff, stopdiff);
-	    print_grid(G, N, world_rank);
     }
     // Finalize the MPI environment.
     MPI_Finalize();
