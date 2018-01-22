@@ -80,7 +80,6 @@ print_grid(double **G, int N, int world_rank)
 {
     int res;
     int coeff = world_rank? P : 1;
-    MPI_Status status;
     for (int i = 1; i < (N / coeff) - 1; i++) {
         for (int j = 1; j < N - 1; j++) {
             printf("%10.3f ", G[i][j]);
@@ -99,8 +98,8 @@ int main(int argc, char** argv) {
     double      maxdiff, glob_maxdiff;
     double      diff;
     int         iteration; /* counters */
-    struct timeval start;
-    struct timeval end;
+    double start;
+    double end;
     double      time;
     // Initialize the MPI environment
     MPI_Init(NULL, NULL);
@@ -125,10 +124,6 @@ int main(int argc, char** argv) {
         /* set up a quadratic grid */
         alloc_grid(&G, N);
         init_grid(G, N);
-        if(gettimeofday(&start, 0) != 0) {
-            printf("could not do timing\n");
-            exit(1);
-        }
     } else {
         // Slave node
         int msg;
@@ -137,10 +132,7 @@ int main(int argc, char** argv) {
     }
     
     if(!world_rank){
-    	if (gettimeofday(&start, 0) != 0) {
-	        printf("could not do timing\n");
-	        exit(1);
-    	}
+    	start = MPI_Wtime();
     }
 
 
@@ -178,12 +170,8 @@ int main(int argc, char** argv) {
 
 
 	if(!world_rank){
-    	if (gettimeofday(&end, 0) != 0) {
-        	printf("could not do timing\n");
-        	exit(1);
-    	}
-	    time = (end.tv_sec + (end.tv_usec / 1000000.0)) -
-	        (start.tv_sec + (start.tv_usec / 1000000.0));
+    	end = MPI_Wtime();
+	    time = end - start;
 
 	    printf("SOR took %10.3f seconds\n", time);	
 	    printf("Used %5d iterations, diff is %10.6f, allowed diff is %10.6f\n", 
