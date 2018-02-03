@@ -102,7 +102,6 @@ void __sync_neigh(double **G, unsigned int locN, unsigned int N){
       MPI_Recv(G[0], N, MPI_DOUBLE, world_rank - 1, MY_ITER_TAG, MPI_COMM_WORLD, &status);
   if(world_rank != P - 1)
       MPI_Recv(G[locN - 1], N, MPI_DOUBLE, world_rank + 1, MY_ITER_TAG, MPI_COMM_WORLD, &status);
-  MPI_Barrier(MPI_COMM_WORLD);
 }
 
 void __sync_matrix(double **G, unsigned int locN, int N){
@@ -151,32 +150,15 @@ double solve(unsigned int N){
   } else {
     alloc_grid(&G, locN, N);
   }
-
   init_grid(G, locN, N);
-  __sync_matrix(G, locN, N);
-  // if(on_master())
-  //   print_grid(G, N, N);
+
   start = MPI_Wtime();
   /* now do the "real" computation */
   iteration = 0;
   do {
-      if(on_master())
-        print_grid(G, N, N);
       maxdiff = 0.0;
-      // __sync_neigh(G, locN, N);
       for (int phase = 0; phase < 2; phase++) {
-        // if(phase == 1){
           __sync_neigh(G, locN, N);
-          // if(!on_master()){
-          //   printf("\nJUST ARRIVED(Fresh blood)\n");
-          //   for(int i = 0; i < N; ++i)
-          //       printf("%10.3f ", G[0][i]);
-          //   printf("\n");
-          // }
-          // if(!on_master())
-          //     printf("%f\n%f\n%f\n%f\n%f\n", G[1][1], G[0][1],G[2][1],G[1][2],G[1][0]);
-        // }
-
           for (int i = 1; i < locN - 1; i++) {
               for (int j = 1 + (even(i + (N/P * (P + 1) + (world_rank != 0? 1 : 0))) ^ phase); j < N - 1; j += 2) {
                   Gnew = stencil(G, i, j);
@@ -190,7 +172,6 @@ double solve(unsigned int N){
           }
       }
       iteration++;
-      __sync_matrix(G, locN, N);
       MPI_Barrier(MPI_COMM_WORLD);
       MPI_Allreduce(&maxdiff, &glob_maxdiff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
       if(on_master())
@@ -238,7 +219,7 @@ main(int argc, char *argv[])
     // printf("SOR took %10.3f seconds\n", time);
 
     if (print == 1) {
-        print_grid(G, N, N);
+        //print_grid(G, N, N);
         std::cout<<" solved ::: " << time <<std::endl;
     }
     MPI_Finalize();
