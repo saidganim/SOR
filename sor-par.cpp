@@ -214,10 +214,13 @@ main(int argc, char *argv[])
     }
 
     time = solve(N);
-    if (print == 1) {
+    if(on_master()){
+      if (print == 1) {
         print_grid(G, N, N);
+      }
+      std::cout<<" solved ::: " << time <<std::endl;
     }
-    std::cout<<" solved ::: " << time <<std::endl;
+
     MPI_Finalize();
     return 0;
 }

@@ -141,8 +141,6 @@ main(int argc, char *argv[])
     /* now do the "real" computation */
     iteration = 0;
     do {
-          print_grid(G, N);
-          // printf("%f\n%f\n%f\n%f\n%f\n", G[5][1], G[5][2], G[5][0],G[4][1],G[6][1]);
         maxdiff = 0.0;
         for (int phase = 0; phase < 2; phase++) {
             for (int i = 1; i < N - 1; i++) {
