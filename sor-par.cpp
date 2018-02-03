@@ -125,8 +125,7 @@ double solve(unsigned int N){
   unsigned int locN;
   double **G;
   double      omega;
-  unsigned long start;
-  unsigned long end;
+  double start, end;
   double time;
   /* differences btw grid points in iters */
   double      stopdiff;
@@ -216,9 +215,9 @@ main(int argc, char *argv[])
 
     time = solve(N);
     if (print == 1) {
-        //print_grid(G, N, N);
-        std::cout<<" solved ::: " << time <<std::endl;
+        print_grid(G, N, N);
     }
+    std::cout<<" solved ::: " << time <<std::endl;
     MPI_Finalize();
     return 0;
 }
