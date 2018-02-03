@@ -93,7 +93,6 @@ print_grid(double **G, int locN, int N)
 void __sync_neigh(double **G, unsigned int locN, unsigned int N){
   MPI_Request request, request_2;
   MPI_Status status;
-  MPI_Barrier(MPI_COMM_WORLD);
   if(world_rank)
       MPI_Isend(G[1], N, MPI_DOUBLE, world_rank - 1, MY_ITER_TAG, MPI_COMM_WORLD, &request);
   if(world_rank != P - 1)
@@ -216,8 +215,6 @@ main(int argc, char *argv[])
     }
 
     time = solve(N);
-    // printf("SOR took %10.3f seconds\n", time);
-
     if (print == 1) {
         //print_grid(G, N, N);
         std::cout<<" solved ::: " << time <<std::endl;
