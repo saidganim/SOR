@@ -75,8 +75,8 @@ init_grid(double **G, int N)
 void
 print_grid(double **G, int N)
 {
-    for (int i = 1; i < N - 1; i++) {
-        for (int j = 1; j < N - 1; j++) {
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N ; j++) {
             printf("%10.3f ", G[i][j]);
         }
         printf("\n");
@@ -104,7 +104,7 @@ main(int argc, char *argv[])
     int         print = 0;
 
     /* set up problem size */
-    N = 100;
+    N = 10;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-print") == 0) {
@@ -141,6 +141,8 @@ main(int argc, char *argv[])
     /* now do the "real" computation */
     iteration = 0;
     do {
+          print_grid(G, N);
+          // printf("%f\n%f\n%f\n%f\n%f\n", G[5][1], G[5][2], G[5][0],G[4][1],G[6][1]);
         maxdiff = 0.0;
         for (int phase = 0; phase < 2; phase++) {
             for (int i = 1; i < N - 1; i++) {
