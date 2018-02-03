@@ -153,12 +153,15 @@ double solve(unsigned int N){
   start = MPI_Wtime();
   /* now do the "real" computation */
   iteration = 0;
+  int border = locN - 1;
+  int even_border = N/P * (P + 1) + (world_rank != 0? 1 : 0);
+  int big_border = N - 1;
   do {
       maxdiff = 0.0;
       for (int phase = 0; phase < 2; phase++) {
           __sync_neigh(G, locN, N);
-          for (int i = 1; i < locN - 1; i++) {
-              for (int j = 1 + (even(i + (N/P * (P + 1) + (world_rank != 0? 1 : 0))) ^ phase); j < N - 1; j += 2) {
+          for (int i = 1; i < border ; i++) {
+              for (int j = 1 + (even(i + (even_border)) ^ phase); j < big_border; j += 2) {
                   Gnew = stencil(G, i, j);
                   diff = fabs(Gnew - G[i][j]);
                   if (diff > maxdiff) {
