@@ -4,6 +4,7 @@
 #include <math.h>
 #include <string.h>
 #include <sys/time.h>
+#include <pthread.h>
 
 #define TOLERANCE 0.00002       /* termination criterion */
 #define MAGIC 0.8               /* magic factor */
@@ -12,8 +13,21 @@
 #define MY_ITER_TAG 0xbad02
 #define MY_PRINT_TAG 0x003
 
+#define P_THREADS 2
+
 int world_rank;
 int P;
+double glob_maxdiff;
+
+pthread_barrier_t thread_fence;
+
+struct thread_args{
+  unsigned int N;
+  short thread_id;
+  double **G;
+  unsigned int locN;
+  unsigned int thread_quant;
+};
 
 int on_master(){
   return world_rank == 0;
@@ -90,7 +104,9 @@ print_grid(double **G, int locN, int N)
 
 
 
-void __sync_neigh(double **G, unsigned int locN, unsigned int N){
+void __sync_neigh(double **G, unsigned int locN, unsigned int N, unsigned thread_id){
+  if(!thread_id)
+    return; // It seems like a cheating, but it's better to only 0's thread take care of MPI things :)
   MPI_Request request, request_2;
   MPI_Status status;
   if(world_rank)
@@ -116,30 +132,94 @@ void __sync_matrix(double **G, unsigned int locN, int N){
   }
 }
 
+static inline void barrier_wait(unsigned thread_id){
+  while(pthread_barrier_wait(&thread_fence) == EAGAIN){}; // wait
+  if(thread_id == 0)
+    pthread_barrier_init(&thread_fence, NULL, P_THREADS); // reinitialize barrier
+}
 
-double solve(unsigned int N){
+void* __solve(void* arg){
+    /*
+      G** double;
+      lockN unsigned
+      N unsigned
+    */
+    struct thread_args& args = *(struct thread_args*)arg;
+    double **G = args.G;
+    double Gnew;
+    unsigned int locN = args.locN, N = args.N;
+    unsigned int thread_quant = args.thread_quant,  thread_id = args.thread_id;
+    int         ncol, nrow;     /* number of rows and columns */
+    double      r;
+    double      omega;
+    double      stopdiff;
+    double      maxdiff;
+    int         iteration; /* counters */
+    double      diff;
+    ncol = nrow = N;
+    r = 0.5 * (cos(M_PI / ncol) + cos(M_PI / nrow));
+    omega = 2.0 / (1 + sqrt(1 - r * r));
+    stopdiff = TOLERANCE / (2.0 - omega);
+    omega *= MAGIC;
 
-  int         ncol, nrow;     /* number of rows and columns */
+    iteration = 0;
+    int border = locN - 1;
+    int even_border = N/P * (P + 1) + N/P/P_THREADS * (P/P_THREADS + 1) + ((world_rank != 0 && thread_id != 0)? 1 : 0); // It's not magic but quite tough
+    int big_border = N - 1;
+    // do {
+        maxdiff = 0.0;
+        for (int phase = 0; phase < 2; phase++) {
+            __sync_neigh(G, locN, N, thread_id);
+            unsigned start_i = (thread_quant * thread_id);
+            for (int i = start_i + 1 ; i < (start_i + thread_quant - 3) ; i++) {
+                for (int j = 1 + (even(i + (even_border)) ^ phase); j < big_border; j += 2) {
+                    // if(thread_id == 0) std::cout<<"J __SOLVE\n";
+                    Gnew = stencil(G, i, j);
+                    diff = fabs(Gnew - G[i][j]);
+                    if (diff > maxdiff) {
+                        maxdiff = diff;
+                    }
+                    G[i][j] = G[i][j] + omega * (Gnew - G[i][j]);
+
+                }
+            }
+            barrier_wait(thread_id);
+        }
+        iteration++;
+        if(thread_id == 0 ){
+          MPI_Barrier(MPI_COMM_WORLD);
+          MPI_Allreduce(&maxdiff, &glob_maxdiff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+        }
+        // barrier_wait(thread_id);
+
+        if(on_master() && thread_id == 0)
+          printf(" ITERATION %d ::: DIFS (%f, %f)\n", iteration, stopdiff, glob_maxdiff);
+    // } while (glob_maxdiff > stopdiff);
+
+    if(on_master() && thread_id == 0){
+      printf("Used %5d iterations, diff is %10.6f, allowed diff is %10.6f\n",
+             iteration, maxdiff, stopdiff);
+
+    }
+    return nullptr;
+}
+
+double solve(unsigned N){
+
+
   double      Gnew;
-  double      r;
-  unsigned int locN;
+
+  unsigned int locN, thread_quant;
   double **G;
-  double      omega;
   double start, end;
   double time;
   /* differences btw grid points in iters */
-  double      stopdiff;
-  double      maxdiff, glob_maxdiff;
-  int         iteration; /* counters */
-  double      diff;
-  /* finally N*N (from argv) array points will be computed */
+  pthread_t workers[P_THREADS];
+  struct thread_args worker_args[P_THREADS];
+  pthread_barrier_init(&thread_fence, NULL, P_THREADS);
 
   /* set up a quadratic grid */
-  ncol = nrow = N + 2;
-  r = 0.5 * (cos(M_PI / ncol) + cos(M_PI / nrow));
-  omega = 2.0 / (1 + sqrt(1 - r * r));
-  stopdiff = TOLERANCE / (2.0 - omega);
-  omega *= MAGIC;
+  thread_quant = N / P / P_THREADS + 2;
   locN = N / P + 2; // Need two border lines;
   N += 2;
   if(on_master()){
@@ -152,39 +232,23 @@ double solve(unsigned int N){
 
   start = MPI_Wtime();
   /* now do the "real" computation */
-  iteration = 0;
-  int border = locN - 1;
-  int even_border = N/P * (world_rank);
-  int big_border = N - 1;
-  do {
-      maxdiff = 0.0;
-      for (int phase = 0; phase < 2; phase++) {
-          __sync_neigh(G, locN, N);
-          for (int i = 1; i < border ; i++) {
-              for (int j = 1 + (even(i + (even_border)) ^ phase); j < big_border; j += 2) {
-                  Gnew = stencil(G, i, j);
-                  diff = fabs(Gnew - G[i][j]);
-                  if (diff > maxdiff) {
-                      maxdiff = diff;
-                  }
-                  G[i][j] = G[i][j] + omega * (Gnew - G[i][j]);
 
-              }
-          }
-      }
-      iteration++;
-      __sync_matrix(G, locN, N);
-      MPI_Barrier(MPI_COMM_WORLD);
-      MPI_Allreduce(&maxdiff, &glob_maxdiff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-      if(on_master())
-        printf(" ITERATION %d ::: DIFS (%f, %f)\n", iteration, stopdiff, glob_maxdiff);
-  } while (glob_maxdiff > stopdiff);
+  for(int thread_i = 0 ; thread_i < P_THREADS; ++thread_i){
+    worker_args[thread_i].N = N;
+    worker_args[thread_i].thread_id = thread_i;
+    worker_args[thread_i].locN = locN;
+    worker_args[thread_i].G = G;
+    worker_args[thread_i].thread_quant = thread_quant;
+    pthread_create(&workers[thread_i], NULL, &__solve, &worker_args[thread_i]);
+  }
+
+  for(int thread_i = 0 ; thread_i < P_THREADS; ++thread_i){
+    void **res;
+    pthread_join(workers[thread_i], res);
+  }
 
   if(on_master()){
     end = MPI_Wtime();
-    printf("Used %5d iterations, diff is %10.6f, allowed diff is %10.6f\n",
-           iteration, glob_maxdiff, stopdiff);
-
     return end - start;
   } else
     return -1;
@@ -194,11 +258,10 @@ double solve(unsigned int N){
 int
 main(int argc, char *argv[])
 {
+
     int         N;              /* problem size */
-    double    **G;              /* the grid */
     double      time;
     int         print = 0;
-
     // Setting up MPI environment
     MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &P);
@@ -219,9 +282,9 @@ main(int argc, char *argv[])
 
     time = solve(N);
     if(on_master()){
-      if (print == 1) {
-        print_grid(G, N, N);
-      }
+      // if (print == 1) {
+      //   print_grid(G, N, N);
+      // }
       std::cout<<" solved ::: " << time <<std::endl;
     }
 
