@@ -1,13 +1,16 @@
 
+all: sor-seq sor-par
 
-MPICC=mpic++
-MPIRUN=mpirun
+run: all
+	par/sor-par ${NSIZE} > par/output
+	seq/sor-seq ${NSIZE} > seq/output
 
-run: sor-par
-	$(MPIRUN) sor-par
+sor-seq: seq/
+	$(MAKE) -C seq
 
-sor-par: sor-par.cpp
-	$(MPICC) sor-par.cpp -o sor-par
+sor-par: par/
+	$(MAKE) -C par
 
-clean: sor-par
-	rm sor-par
+clean:
+	rm par/sor-par
+	rm seq/sor-seq
