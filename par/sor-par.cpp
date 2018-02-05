@@ -143,7 +143,7 @@ double solve(unsigned int N){
   locN = N / P + 2; // Need two border lines;
   N += 2;
   if(on_master()){
-    start = MPI_Wtime();
+    printf("Running %d x %d SOR\n", N - 2, N - 2);
     alloc_grid(&G, N, N);
   } else {
     alloc_grid(&G, locN, N);
@@ -177,11 +177,12 @@ double solve(unsigned int N){
       MPI_Barrier(MPI_COMM_WORLD);
       MPI_Allreduce(&maxdiff, &glob_maxdiff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
       if(on_master())
-        printf(" ITERATION %d ::: DIFS (%f, %f)\n", iteration, stopdiff, glob_maxdiff);
+        printf(" ITERATION %d\n", iteration);
   } while (glob_maxdiff > stopdiff);
 
   if(on_master()){
     end = MPI_Wtime();
+    printf("SOR took %10.3f seconds\n", time);
     printf("Used %5d iterations, diff is %10.6f, allowed diff is %10.6f\n",
            iteration, glob_maxdiff, stopdiff);
 
@@ -222,7 +223,6 @@ main(int argc, char *argv[])
       if (print == 1) {
         print_grid(G, N, N);
       }
-      std::cout<<" solved ::: " << time <<std::endl;
     }
 
     MPI_Finalize();
