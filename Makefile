@@ -1,9 +1,10 @@
+MPIRUN=mpirun
 
 all: sor-seq sor-par
 
 run: all
-	par/sor-par ${NSIZE} > par/output
-	seq/sor-seq ${NSIZE} > seq/output
+	$(MPIRUN) par/sor-par ${NSIZE} ${PRINT}> par/output
+	seq/sor-seq ${NSIZE} ${PRINT}> seq/output
 
 diff: run
 	diff -s par/output seq/output > diff_par_seq

@@ -171,9 +171,9 @@ main(int argc, char *argv[])
     printf("Used %5d iterations, diff is %10.6f, allowed diff is %10.6f\n",
            iteration, maxdiff, stopdiff);
 
-    // if (print == 1) {
-    //     print_grid(G, N);
-    // }
+    if (print == 1) {
+        print_grid(G, N);
+    }
 
     return 0;
 }

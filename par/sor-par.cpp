@@ -117,7 +117,7 @@ void __sync_matrix(double **G, unsigned int locN, int N){
 }
 
 
-double solve(unsigned int N){
+double solve(unsigned int N, char print){
 
   int         ncol, nrow;     /* number of rows and columns */
   double      Gnew;
@@ -173,7 +173,7 @@ double solve(unsigned int N){
           }
       }
       iteration++;
-      __sync_matrix(G, locN, N);
+      //__sync_matrix(G, locN, N);
       MPI_Barrier(MPI_COMM_WORLD);
       MPI_Allreduce(&maxdiff, &glob_maxdiff, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
       if(on_master())
@@ -182,10 +182,12 @@ double solve(unsigned int N){
 
   if(on_master()){
     end = MPI_Wtime();
+    time = end - start;
     printf("SOR took %10.3f seconds\n", time);
     printf("Used %5d iterations, diff is %10.6f, allowed diff is %10.6f\n",
            iteration, glob_maxdiff, stopdiff);
-
+    if (print == 1)
+      print_grid(G, N, N);
     return end - start;
   } else
     return -1;
@@ -198,7 +200,7 @@ main(int argc, char *argv[])
     int         N;              /* problem size */
     double    **G;              /* the grid */
     double      time;
-    int         print = 0;
+    char         print = 0;
 
     // Setting up MPI environment
     MPI_Init(NULL, NULL);
@@ -218,13 +220,7 @@ main(int argc, char *argv[])
         }
     }
 
-    time = solve(N);
-    if(on_master()){
-      if (print == 1) {
-        print_grid(G, N, N);
-      }
-    }
-
+    time = solve(N, print);
     MPI_Finalize();
     return 0;
 }
